@@ -3,12 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-
-#define RANGE 200
-#define HEIGHT 50
+#include <math.h>
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+
+#define BOLD(s) "\e[1m" s "\e[0m"
+#define RED(s) "\e[31m" s "\e[0m"
+#define GREEN(s) "\e[32m" s "\e[0m"
 
 typedef struct {
     int year, month, day;
@@ -21,16 +23,24 @@ typedef struct {
     int volume;
 } Flare;
 
-// When I look at error handling in this file I start to miss monads
+// When I look at error handling in this file I start to miss haskell
 
 int main(int argc,char *argv[]) {
-    if (argc < 2) { puts("No input or output file provided."); exit(1); }
+    if (argc < 3) { puts("No input or output file provided."); exit(1); }
     
     FILE *input_fd = fopen(argv[1], "r");
     if (!input_fd) { puts("Incorrect input file name provided."); exit(1); }
 
     FILE *output_fd = fopen(argv[2], "w");
     if (!input_fd) { puts("Incorrect output file name provided."); exit(1); }
+
+    int range = 200;
+    int height = 50;
+    if (argc < 4) { puts("No height provided. Assuming 50."); }
+    else { height = atoi(argv[3]); }
+
+    if (argc < 5) { puts("No range provided. Assuming 200."); }
+    else { range = atoi(argv[4]); }
 
     // Find size of file in number of chars
     fseek(input_fd, 0, SEEK_END);
@@ -73,60 +83,67 @@ int main(int argc,char *argv[]) {
     }
 
     // allocate array for strings
-    char **graph = (char**)malloc(sizeof(char*) * RANGE);
+    char **graph = (char**)malloc(sizeof(char*) * range);
     if (!graph) { puts("Memory allocation error!"); exit(1); }
 
     // allocate said strings, remember null terminator because C
-    for (int i; i < RANGE; i++) {
-        graph[i] = (char*)malloc(sizeof(char) * (HEIGHT + 1));
+    for (int i; i < range; i++) {
+        graph[i] = (char*)malloc(sizeof(char) * (height + 1));
         if (!graph[i]) { puts("Memory allocation error!"); exit(1); }
     }
 
     // currently temporary restriction
-    if (data_s < RANGE) { puts("Minimum number of records is 200"); exit(1); }
+    if (data_s < range) { puts("Minimum number of records is 200"); exit(1); }
 
     // Find highest and lowest value in range
     double highest = MAX(data[0].high, data[0].low);
     double lowest  = MIN(data[0].high, data[0].low);
-    for (int i = 0; i < RANGE; i++) {
+    for (int i = 0; i < range; i++) {
         if (highest < data[i].high) { highest = data[i].high; }
         if (highest < data[i].low ) { highest = data[i].low ; }
         if (lowest  > data[i].high) { lowest  = data[i].high; }
         if (lowest  > data[i].low ) { lowest  = data[i].low ; }
     }
     double amplitude = highest - lowest;
-    double scale_factor = (HEIGHT / amplitude);
+    double scale_factor = (height / amplitude);
 
-    for (int i = 0; i < RANGE; i++) {
+    for (int i = 0; i < range; i++) {
         Flare flare = data[i];
         bool falling = flare.open > flare.close;
         double top = (flare.high - lowest) * scale_factor;
         double bot = (flare.low  - lowest) * scale_factor;
-        double floor, ceil;
+        double g_floor, g_ceil;
 
-        if (falling) { ceil = (flare.open  - lowest) * scale_factor; floor = (flare.close - lowest) * scale_factor; }
-        else         { ceil = (flare.close - lowest) * scale_factor; floor = (flare.open  - lowest) * scale_factor; }
+        if (falling) { g_ceil = (flare.open  - lowest) * scale_factor; g_floor = (flare.close - lowest) * scale_factor; }
+        else         { g_ceil = (flare.close - lowest) * scale_factor; g_floor = (flare.open  - lowest) * scale_factor; }
 
         // Set string
-        memset(graph[i], ' ', HEIGHT);
-        graph[i][HEIGHT] = '\0';
+        memset(graph[i], ' ', height);
+        graph[i][height] = '\0';
         
         // Fill string
-        for (int j = 0; j < HEIGHT; j++) {
-            if (j > bot && j < floor)  { graph[i][j] = '|'; }
-            if (j > floor && j < ceil) { graph[i][j] = (falling ? 'O' : '#'); }
-            if (j > ceil && j < top)   { graph[i][j] = '|'; }
+        for (int j = 0; j < height; j++) {
+            if (j > bot && j < g_floor)    { graph[i][j] = '|'; }
+            if (j > g_ceil && j < top)     { graph[i][j] = '|'; }
+            if (j > g_floor && j < g_ceil) { graph[i][j] = (falling ? 'O' : '#'); }
         }
 
         // printf("[DEBUG] %4d-%02d-%02d:            open: %lf   close: %lf   high: %lf   low:   %lf\n", flare.date.year, flare.date.month, flare.date.day, flare.open, flare.close, flare.high, flare.low);
-        // printf("[DEBUG] %4d-%02d-%02d: fall: %d    top:  %lf    bot:   %lf    ceil: %lf    floor: %lf\n", flare.date.year, flare.date.month, flare.date.day, falling, top, bot, ceil, floor);
+        // printf("[DEBUG] %4d-%02d-%02d: fall: %d    top:  %lf    bot:   %lf    g_ceil: %lf    g_floor: %lf\n", flare.date.year, flare.date.month, flare.date.day, falling, top, bot, ceil, floor);
     }
 
-    for (int i = 0; i < HEIGHT; i++) {
-        for (int j = 0; j < RANGE; j++) {
+    for (int i = (height - 1); i > 0; i--) {
+        for (int j = (range - 1); j > 0; j--) {
+            char c = graph[j][i];
+            // if (c == '|') { fprintf(stdout, "│"); }
+            // if (c == 'O') { fprintf(stdout, RED("█")); }
+            // if (c == '#') { fprintf(stdout, GREEN("█")); }
+            // if (c == ' ') { fprintf(stdout, " "); }
             fprintf(output_fd, "%c", graph[j][i]);
+            fprintf(stdout, "%c", graph[j][i]);
         }
         fprintf(output_fd, "\n");
+        fprintf(stdout, "\n");
     }
 
     // printf("highest: %lf    lowest: %lf\n", highest, lowest);
