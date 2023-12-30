@@ -29,14 +29,22 @@ typedef struct {
     int volume;
 } Flare;
 
+typedef enum {
+    RECORD,
+    DATE,
+} RangeType;
 typedef struct {
-    int start, end;
+    RangeType type;
+    union {
+        struct { int  start, end; } record;
+        struct { Date start, end; } date;
+    } range;
 } Range;
 
 typedef enum {
     DAY,
     WEEK,
-    YEAR,
+    MONTH,
 } Span;
 
 #define GREET "\
@@ -53,7 +61,7 @@ void print_graph(FILE *output_fd, char **graph, Range range, int height);
 int main() {
     FILE *input_fd;
     FILE *output_fd;
-    Range range = {0, 0};
+    Range range = {DATE, 0, 0};
     int height = 50;
     Span span = DAY;
     int selected = 0;
@@ -78,7 +86,18 @@ int main() {
         puts(GREET);
         printf("Input  file name: %s\n", input_name);
         printf("Output file name: %s\n", output_name);
-        printf("Range is: %i -> %i\n", range.start, range.end);
+
+
+        printf("Range type is:"); if (range.type == RECORD) { printf("record\n"); } else { printf("date\n"); }
+
+        if (range.type == RECORD) { printf("Range is: %i -> %i", range.range.record.start, range.range.record.end); }
+        else {
+            Date rgdt_start = range.range.date.start;
+            Date rgdt_end = range.range.date.end;
+            printf("Range is:");
+            printf(" %04d-%02d-%02d -> ", rgdt_start.year, rgdt_start.month, rgdt_start.day);
+            printf(" %04d-%02d-%02d\n"  , rgdt_end.year, rgdt_end.month, rgdt_end.day);
+        }
         printf("Records selected: %i\n", selected);
         printf("Height: %i\n", height);
         printf("\n");
@@ -97,8 +116,8 @@ int main() {
             scanf("%*c");
             input_fd  = fopen("intc_us_data.csv", "r");
             output_fd = fopen("chart.txt", "w");
-            if (!input_fd)  { puts("Error while opening file."); exit(1); }
-            if (!output_fd) { puts("Error while opening file."); exit(1); }
+            if (!input_fd)  { puts("Couldn't open input file.");  scanf("%*c"); break; }
+            if (!output_fd) { puts("Couldn't open output file."); scanf("%*c"); break; }
 
             load_data(input_fd, output_fd, &data_s, &data);
             range = (Range){data_s - 200, data_s};
@@ -141,25 +160,83 @@ int main() {
         case 'h':
             scanf("%*c");
             puts("Provide a height of the graph:");
-            fgets(buffer, 255, stdin);
-            height = atoi(buffer);
-
+            scanf("%d", &height);
             cls();
             printf("Height set to: %i\n", height);
             scanf("%*c");
             break;
         case 'r':
             scanf("%*c");
-            fgets(buffer, 255, stdin);
+            if (range.type == DATE) {
+                Date rgdt_start;
+                Date rgdt_end;  
+                int matched;
+
+                puts("Provide starting date in format:");
+                puts("yyyy-mm-dd");
+                fgets(buffer, 255, stdin);
+                matched = sscanf(buffer, "%4d-%2d-%2d", &rgdt_start.year, &rgdt_start.month, &rgdt_start.day);
+                if (matched < 3) { puts("Incorrect date formatting. Defaulting to 2014-01-01"); rgdt_start = (Date){2014, 1, 1}; };
+
+                puts("Provide ending date in format:");
+                puts("yyyy-mm-dd");
+                fgets(buffer, 255, stdin);
+                matched = sscanf(buffer, "%4d-%2d-%2d", &rgdt_end.year, &rgdt_end.month, &rgdt_end.day);
+                if (matched < 3) { puts("Incorrect date formatting. Defaulting to 2018-01-01"); rgdt_end = (Date){2018, 1, 1}; };
+
+                range.range.date.start = rgdt_start;
+                range.range.date.end   = rgdt_end;
+            } else {
+                int rgrc_start;
+                int rgrc_end;
+
+                puts("Provide starting record:");
+                scanf("%d", &rgrc_start);
+
+                puts("Provide ending record:");
+                scanf("%d", &rgrc_end);
+            }
+            scanf("%*c");
+            break;
+        case 'c':
+            scanf("%*c");
+            puts("Provide range type: 'd' -> date, 'r' -> records");
+            scanf("%c", &input);
+            if (input == 'd') { range.type = DATE;   cls(); puts("Changed to date.");    }
+            if (input == 'r') { range.type = RECORD; cls(); puts("Changed to records."); }
+            else { range.type = DATE; cls(); puts("Incorrect input. Defaulting to date."); }
+            scanf("%*c");
+            break;
+        case 'l':
+            scanf("%*c");
+            // Yes the file info won't be updated until load
+            // I've already spent enough time avoiding doing math
+            // and I'm not spending more time fixing this program
+            if (input_fd  != NULL) { fclose(input_fd);  }
+            if (output_fd != NULL) { fclose(output_fd); }
+            input_fd  = fopen(input_name,  "r");
+            output_fd = fopen(output_name, "w");
+            if (!input_fd)  { puts("Couldn't open input file.");  scanf("%*c"); break; }
+            if (!output_fd) { puts("Couldn't open output file."); scanf("%*c"); break; }
+            load_data(input_fd, output_fd, &data_s, &data);
+            puts("Data loaded succesfully.");
             scanf("%*c");
             break;
         case 's':
             scanf("%*c");
-            // scanf("%c", );
+            puts("Provide a span of one column: d -> day, w -> week, m -> month");
+            scanf("%c", &input);
+            switch (input) {
+            case 'd': span = DAY;   break;
+            case 'w': span = WEEK;  break;
+            case 'm': span = MONTH; break;
+            default: puts("Incorrect input. Defaulting to day."); span = DAY; break;
+            }
             scanf("%*c");
+        case 'p':
+            generate_graph(data_s, data, range, height, span, &graph);
+            print_graph(output_fd, graph, range, height);
             break;
-        case 'l': break;
-        case 'p': break;
         case 'q': done = true; break;
         default: break;
         }
