@@ -33,22 +33,30 @@ typedef struct {
     int start, end;
 } Range;
 
+typedef enum {
+    DAY,
+    WEEK,
+    YEAR,
+} Span;
+
 #define GREET "\
 STOCK FLARES GENERATOR\n\
 Igor Lempicki EiT gr.1 200449\n\
 "
 
 void load_data(FILE *input_fd, FILE *output_fd, int *data_s, Flare **data);
-void generate_graph(int data_s, Flare *data, Range range, int height, char ***graph);
+void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph);
 void print_graph(FILE *output_fd, char **graph, Range range, int height);
 
 // When I look at error handling in this file I start to miss haskell
 
-int main(int argc,char *argv[]) {
+int main() {
     FILE *input_fd;
     FILE *output_fd;
     Range range = {0, 0};
     int height = 50;
+    Span span = DAY;
+    int selected = 0;
 
     int data_s;
     Flare *data;
@@ -57,6 +65,9 @@ int main(int argc,char *argv[]) {
 
     char input_name [1024] = {0};
     char output_name[1024] = {0};
+    
+    // for numbers
+    char buffer     [256] = {0};
 
     /// MENU //////////////////////////////////////////////////////////////////////////////////////
     bool done = false;
@@ -65,11 +76,25 @@ int main(int argc,char *argv[]) {
     while (!done) {
         cls();
         puts(GREET);
+        printf("Input  file name: %s\n", input_name);
+        printf("Output file name: %s\n", output_name);
+        printf("Range is: %i -> %i\n", range.start, range.end);
+        printf("Records selected: %i\n", selected);
+        printf("Height: %i\n", height);
+        printf("\n");
 
-        scanf("%c%[^\n]", &input);
+        // Clear buffer
+        memset(buffer, '\0', 256);
+        scanf("%c", &input);
+        
+        cls();
+        puts(GREET);
 
         switch (input) {
         case 'g':
+            // I'm just ignoring trailing '\n'
+            // Couldn't find easier way
+            scanf("%*c");
             input_fd  = fopen("intc_us_data.csv", "r");
             output_fd = fopen("chart.txt", "w");
             if (!input_fd)  { puts("Error while opening file."); exit(1); }
@@ -77,7 +102,7 @@ int main(int argc,char *argv[]) {
 
             load_data(input_fd, output_fd, &data_s, &data);
             range = (Range){data_s - 200, data_s};
-            generate_graph(data_s, data, range, height, &graph);
+            generate_graph(data_s, data, range, height, span, &graph);
             print_graph(output_fd, graph, range, height);
 
             free(data);
@@ -86,16 +111,61 @@ int main(int argc,char *argv[]) {
             fclose(output_fd);
 
             cls();
-            printf("{start: %i, end: %i}\n", range.start, range.end);
             puts("File read: intc_us_data.csv");
             puts("Data written to: chart.txt");
-            scanf("%c*");
+            scanf("%*c");
             break;
+        case 'i':
+            scanf("%*c");
+            puts("Provide input file name:");
+            fgets(input_name, 1023, stdin);
+            // Because c strings are null terminated I can get away with not clearing the buffer
+            for (int i = 0; i < 1024; i++) { if (input_name[i] == '\n') { input_name[i] = '\0'; break; } }
+            
+            cls();
+            puts("File name set to:");
+            puts(input_name);
+            scanf("%*c");
+            break;
+        case 'o':
+            scanf("%*c");
+            puts("Provide output file name:");
+            fgets(output_name, 1023, stdin);
+            for (int i = 0; i < 1024; i++) { if (output_name[i] == '\n') { output_name[i] = '\0'; break; } }
+            
+            cls();
+            puts("File name set to:");
+            puts(output_name);
+            scanf("%*c");
+            break;
+        case 'h':
+            scanf("%*c");
+            puts("Provide a height of the graph:");
+            fgets(buffer, 255, stdin);
+            height = atoi(buffer);
+
+            cls();
+            printf("Height set to: %i\n", height);
+            scanf("%*c");
+            break;
+        case 'r':
+            scanf("%*c");
+            fgets(buffer, 255, stdin);
+            scanf("%*c");
+            break;
+        case 's':
+            scanf("%*c");
+            // scanf("%c", );
+            scanf("%*c");
+            break;
+        case 'l': break;
+        case 'p': break;
         case 'q': done = true; break;
         default: break;
         }
     }
     
+    cls();
     return 0;
     ///////////////////////////////////////////////////////////////////////////////////////////////
 }
@@ -144,7 +214,7 @@ void load_data(FILE *input_fd, FILE *output_fd, int *data_s, Flare **data) {
 
 }
 
-void generate_graph(int data_s, Flare *data, Range range, int height, char ***graph_out) {
+void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph_out) {
     int len = range.end - range.start;
     
     // allocate array for strings
