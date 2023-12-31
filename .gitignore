@@ -1,6 +1,5 @@
 a.out
 *.csv
 *.json
-chart.txt
+*.txt
 main
-out.txt
