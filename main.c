@@ -52,6 +52,21 @@ STOCK FLARES GENERATOR\n\
 Igor Lempicki EiT gr.1 200449\n\
 "
 
+#define HELP "\
+Select an option py typing a letter:\n\
+g -> Make a chart form intc_us_data.csv and export it to chart.txt\n\
+i -> Set input file name.\n\
+o -> Set output file name.\n\
+e -> Set chart height.\n\
+r -> Select range of exproted data.\n\
+c -> Select range type: by date or by entry number.\n\
+l -> Load data from input file.\n\
+s -> Select span of one bar: day, week or month.\n\
+p -> Print chart to output file.\n\
+h -> Display help.\n\
+q -> Quit.\n\
+"
+
 const char *default_in  = "intc_us_data.csv";
 const char *default_out = "chart.txt";
 
@@ -165,7 +180,7 @@ int main() {
             puts(output_name);
             scanf("%*c");
             break;
-        case 'h':
+        case 'e':
             scanf("%*c");
             puts("Provide a height of the graph:");
             scanf("%d", &height);
@@ -244,12 +259,22 @@ int main() {
             scanf("%*c");
             break;
         case 'p':
+            scanf("%*c");
+            if (data == NULL) { puts("You need to load the data first."); scanf("%*c"); break; }
             if (graph != NULL) { free(graph); }
             generate_graph(data_s, data, range, height, span, &graph, &selected);
             output_fd = fopen(output_name, "w");
             if (!output_fd) { puts("Couldn't open output file."); scanf("%*c"); break; }
             print_graph(output_fd, graph, selected, height);
             fclose(output_fd);
+            cls();
+            puts("Graph exported succesfully.");
+            scanf("%*c");
+            break;
+        case 'h':
+            scanf("%*c");
+            puts(HELP);
+            scanf("%*c");
             break;
         case 'q': done = true; break;
         default: break;
@@ -307,8 +332,8 @@ void load_data(FILE *input_fd, FILE *output_fd, int *data_s, Flare **data) {
 
 void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph_out, int *selected) {
     // count number of entries selected
-    int start_entry;
-    int end_entry;
+    int start_entry = 0;
+    int end_entry   = data_s;
     if (range.type == DATE) {
         Date start_date = range.range.date.start;
         Date end_date = range.range.date.end;
