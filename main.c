@@ -52,16 +52,22 @@ STOCK FLARES GENERATOR\n\
 Igor Lempicki EiT gr.1 200449\n\
 "
 
+const char *default_in  = "intc_us_data.csv";
+const char *default_out = "chart.txt";
+
+// TODO:
+// fix graph generation so it loads by date and record ranges
+
 void load_data(FILE *input_fd, FILE *output_fd, int *data_s, Flare **data);
-void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph);
-void print_graph(FILE *output_fd, char **graph, Range range, int height);
+void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph, int *selected);
+void print_graph(FILE *output_fd, char **graph, int selected, int height);
 
 // When I look at error handling in this file I start to miss haskell
 
 int main() {
     FILE *input_fd;
     FILE *output_fd;
-    Range range = {DATE, 0, 0};
+    Range range = {RECORD, 0, 200};
     int height = 50;
     Span span = DAY;
     int selected = 0;
@@ -73,6 +79,8 @@ int main() {
 
     char input_name [1024] = {0};
     char output_name[1024] = {0};
+    memcpy(input_name,  default_in,  17);    
+    memcpy(output_name, default_out, 10);
     
     // for numbers
     char buffer     [256] = {0};
@@ -87,16 +95,15 @@ int main() {
         printf("Input  file name: %s\n", input_name);
         printf("Output file name: %s\n", output_name);
 
+        printf("Range type is: "); if (range.type == RECORD) { printf("record\n"); } else { printf("date\n"); }
 
-        printf("Range type is:"); if (range.type == RECORD) { printf("record\n"); } else { printf("date\n"); }
-
-        if (range.type == RECORD) { printf("Range is: %i -> %i", range.range.record.start, range.range.record.end); }
+        if (range.type == RECORD) { printf("Range is: %i -> %i\n", range.range.record.start, range.range.record.end); }
         else {
             Date rgdt_start = range.range.date.start;
             Date rgdt_end = range.range.date.end;
-            printf("Range is:");
-            printf(" %04d-%02d-%02d -> ", rgdt_start.year, rgdt_start.month, rgdt_start.day);
-            printf(" %04d-%02d-%02d\n"  , rgdt_end.year, rgdt_end.month, rgdt_end.day);
+            printf("Range is: ");
+            printf("%04d-%02d-%02d -> ", rgdt_start.year, rgdt_start.month, rgdt_start.day);
+            printf("%04d-%02d-%02d\n"  , rgdt_end.year, rgdt_end.month, rgdt_end.day);
         }
         printf("Records selected: %i\n", selected);
         printf("Height: %i\n", height);
@@ -111,6 +118,7 @@ int main() {
 
         switch (input) {
         case 'g':
+            // With this scanf()
             // I'm just ignoring trailing '\n'
             // Couldn't find easier way
             scanf("%*c");
@@ -120,9 +128,9 @@ int main() {
             if (!output_fd) { puts("Couldn't open output file."); scanf("%*c"); break; }
 
             load_data(input_fd, output_fd, &data_s, &data);
-            range = (Range){data_s - 200, data_s};
-            generate_graph(data_s, data, range, height, span, &graph);
-            print_graph(output_fd, graph, range, height);
+            range = (Range){RECORD, data_s - 200, data_s};
+            generate_graph(data_s, data, range, height, span, &graph, &selected);
+            print_graph(output_fd, graph, selected, height);
 
             free(data);
             free(graph);
@@ -195,6 +203,9 @@ int main() {
 
                 puts("Provide ending record:");
                 scanf("%d", &rgrc_end);
+
+                range.range.record.start = rgrc_start;
+                range.range.record.end = rgrc_end;
             }
             scanf("%*c");
             break;
@@ -212,13 +223,11 @@ int main() {
             // Yes the file info won't be updated until load
             // I've already spent enough time avoiding doing math
             // and I'm not spending more time fixing this program
-            if (input_fd  != NULL) { fclose(input_fd);  }
-            if (output_fd != NULL) { fclose(output_fd); }
+            if (data != NULL) { free(data); }
             input_fd  = fopen(input_name,  "r");
-            output_fd = fopen(output_name, "w");
             if (!input_fd)  { puts("Couldn't open input file.");  scanf("%*c"); break; }
-            if (!output_fd) { puts("Couldn't open output file."); scanf("%*c"); break; }
             load_data(input_fd, output_fd, &data_s, &data);
+            fclose(input_fd);
             puts("Data loaded succesfully.");
             scanf("%*c");
             break;
@@ -233,9 +242,14 @@ int main() {
             default: puts("Incorrect input. Defaulting to day."); span = DAY; break;
             }
             scanf("%*c");
+            break;
         case 'p':
-            generate_graph(data_s, data, range, height, span, &graph);
-            print_graph(output_fd, graph, range, height);
+            if (graph != NULL) { free(graph); }
+            generate_graph(data_s, data, range, height, span, &graph, &selected);
+            output_fd = fopen(output_name, "w");
+            if (!output_fd) { puts("Couldn't open output file."); scanf("%*c"); break; }
+            print_graph(output_fd, graph, selected, height);
+            fclose(output_fd);
             break;
         case 'q': done = true; break;
         default: break;
@@ -291,8 +305,35 @@ void load_data(FILE *input_fd, FILE *output_fd, int *data_s, Flare **data) {
 
 }
 
-void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph_out) {
-    int len = range.end - range.start;
+void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph_out, int *selected) {
+    // count number of entries selected
+    int start_entry;
+    int end_entry;
+    if (range.type == DATE) {
+        Date start_date = range.range.date.start;
+        Date end_date = range.range.date.end;
+        for (int i = 0; i < data_s; i++) {
+            Date curr_date = data[i].date;
+            if (curr_date.year  >= start_date.year  &&
+                curr_date.month >= start_date.month &&
+                curr_date.day   >= start_date.day)
+                { start_entry = i; break; }
+        }
+
+        for (int i = 0; i < data_s; i++) {
+            Date curr_date = data[i].date;
+            if (curr_date.year  >= end_date.year  &&
+                curr_date.month >= end_date.month &&
+                curr_date.day   >= end_date.day)
+                { end_entry = i; break; }
+        }
+    } else {
+        start_entry = range.range.record.start;
+        end_entry = range.range.record.end;
+    }
+
+    int len = end_entry - start_entry;
+    *selected = len;
     
     // allocate array for strings
     char **graph;
@@ -320,7 +361,7 @@ void generate_graph(int data_s, Flare *data, Range range, int height, Span span,
     double amplitude = highest - lowest;
     double scale_factor = (height / amplitude);
 
-    for (int i = range.start; i < range.end; i++) {
+    for (int i = start_entry; i < end_entry; i++) {
         Flare flare = data[i];
         bool falling = flare.open > flare.close;
         double top = (flare.high - lowest) * scale_factor;
@@ -330,7 +371,7 @@ void generate_graph(int data_s, Flare *data, Range range, int height, Span span,
         if (falling) { g_ceil = (flare.open  - lowest) * scale_factor; g_floor = (flare.close - lowest) * scale_factor; }
         else         { g_ceil = (flare.close - lowest) * scale_factor; g_floor = (flare.open  - lowest) * scale_factor; }
 
-        int gi = i - range.start;
+        int gi = i - start_entry;
 
         // Set string
         memset(graph[gi], ' ', height);
@@ -347,10 +388,9 @@ void generate_graph(int data_s, Flare *data, Range range, int height, Span span,
     *graph_out = graph;
 }
 
-void print_graph(FILE *output_fd, char **graph, Range range, int height) {
-    int len = range.end - range.start;
+void print_graph(FILE *output_fd, char **graph, int selected, int height) {
     for (int i = (height - 1); i > 0; i--) {
-        for (int j = 0; j < len; j++) {
+        for (int j = 0; j < selected; j++) {
             char c = graph[j][i];
             // if (c == '|') { fprintf(stdout, "│"); }
             // if (c == 'O') { fprintf(stdout, RED("█")); }
