@@ -73,7 +73,7 @@ const char *default_out = "chart.txt";
 // TODO:
 // fix graph generation so it loads by date and record ranges
 
-void load_data(FILE *input_fd, FILE *output_fd, int *data_s, Flare **data);
+void load_data(FILE *input_fd, int *data_s, Flare **data);
 void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph, int *selected);
 void print_graph(FILE *output_fd, char **graph, int selected, int height);
 
@@ -142,7 +142,7 @@ int main() {
             if (!input_fd)  { puts("Couldn't open input file.");  scanf("%*c"); break; }
             if (!output_fd) { puts("Couldn't open output file."); scanf("%*c"); break; }
 
-            load_data(input_fd, output_fd, &data_s, &data);
+            load_data(input_fd, &data_s, &data);
             range = (Range){RECORD, data_s - 200, data_s};
             generate_graph(data_s, data, range, height, span, &graph, &selected);
             print_graph(output_fd, graph, selected, height);
@@ -241,7 +241,7 @@ int main() {
             if (data != NULL) { free(data); }
             input_fd  = fopen(input_name,  "r");
             if (!input_fd)  { puts("Couldn't open input file.");  scanf("%*c"); break; }
-            load_data(input_fd, output_fd, &data_s, &data);
+            load_data(input_fd, &data_s, &data);
             fclose(input_fd);
             puts("Data loaded succesfully.");
             scanf("%*c");
@@ -286,7 +286,7 @@ int main() {
     ///////////////////////////////////////////////////////////////////////////////////////////////
 }
 
-void load_data(FILE *input_fd, FILE *output_fd, int *data_s, Flare **data) {
+void load_data(FILE *input_fd, int *data_s, Flare **data) {
     // Find size of file in number of chars
     fseek(input_fd, 0, SEEK_END);
     int buffer_s = ftell(input_fd);
