@@ -76,6 +76,7 @@ const char *default_out = "chart.txt";
 void load_data(FILE *input_fd, int *data_s, Flare **data);
 void generate_graph(int data_s, Flare *data, Range range, int height, Span span, char ***graph, int *selected);
 void print_graph(FILE *output_fd, char **graph, int selected, int height);
+void calculate_selected(int data_s, Flare *data, Range range, int *selected);
 
 // When I look at error handling in this file I start to miss haskell
 
@@ -199,13 +200,17 @@ int main() {
                 puts("yyyy-mm-dd");
                 fgets(buffer, 255, stdin);
                 matched = sscanf(buffer, "%4d-%2d-%2d", &rgdt_start.year, &rgdt_start.month, &rgdt_start.day);
-                if (matched < 3) { puts("Incorrect date formatting. Defaulting to 2014-01-01"); rgdt_start = (Date){2014, 1, 1}; };
+                if (matched < 3) { puts("Incorrect date formatting. Defaulting to 2014-01-01"); rgdt_start = (Date){2014, 1, 1}; }
+                if (rgdt_start.month < 1 || rgdt_start.month > 12) { puts("Incorrect month range. Setting to January."); rgdt_start.month = 1; }
+                if (rgdt_start.month < 1 || rgdt_start.month > 31) { puts("Incorrect day range. Setting to 1."); rgdt_start.day = 1; }
 
                 puts("Provide ending date in format:");
                 puts("yyyy-mm-dd");
                 fgets(buffer, 255, stdin);
                 matched = sscanf(buffer, "%4d-%2d-%2d", &rgdt_end.year, &rgdt_end.month, &rgdt_end.day);
                 if (matched < 3) { puts("Incorrect date formatting. Defaulting to 2018-01-01"); rgdt_end = (Date){2018, 1, 1}; };
+                if (rgdt_end.month < 1 || rgdt_end.month > 12) { puts("Incorrect month range. Setting to January."); rgdt_end.month = 1; }
+                if (rgdt_end.month < 1 || rgdt_end.month > 31) { puts("Incorrect day range. Setting to 1."); rgdt_end.day = 1; }
 
                 range.range.date.start = rgdt_start;
                 range.range.date.end   = rgdt_end;
@@ -222,6 +227,11 @@ int main() {
                 range.range.record.start = rgrc_start;
                 range.range.record.end = rgrc_end;
             }
+            
+            if (data != NULL) {
+                calculate_selected(data_s, data, range, &selected);
+            }
+
             scanf("%*c");
             break;
         case 'c':
@@ -284,6 +294,37 @@ int main() {
     cls();
     return 0;
     ///////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+void calculate_selected(int data_s, Flare *data, Range range, int *selected) {
+    // count number of entries selected
+    int start_entry = 0;
+    int end_entry   = data_s;
+    if (range.type == DATE) {
+        Date start_date = range.range.date.start;
+        Date end_date = range.range.date.end;
+        for (int i = 0; i < data_s; i++) {
+            Date curr_date = data[i].date;
+            if (curr_date.year  >= start_date.year  &&
+                curr_date.month >= start_date.month &&
+                curr_date.day   >= start_date.day)
+                { start_entry = i; break; }
+        }
+
+        for (int i = 0; i < data_s; i++) {
+            Date curr_date = data[i].date;
+            if (curr_date.year  >= end_date.year  &&
+                curr_date.month >= end_date.month &&
+                curr_date.day   >= end_date.day)
+                { end_entry = i; break; }
+        }
+    } else {
+        start_entry = range.range.record.start;
+        end_entry = range.range.record.end;
+    }
+
+    int len = end_entry - start_entry;
+    *selected = len;
 }
 
 void load_data(FILE *input_fd, int *data_s, Flare **data) {
@@ -359,7 +400,7 @@ void generate_graph(int data_s, Flare *data, Range range, int height, Span span,
 
     int len = end_entry - start_entry;
     *selected = len;
-    
+
     // allocate array for strings
     char **graph;
     graph = (char**)malloc(sizeof(char*) * (len));
